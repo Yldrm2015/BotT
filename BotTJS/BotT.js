@@ -343,6 +343,10 @@ processScrollEvent(data) {
         console.error(`[${this.timestamp}] Scroll event processing error:`, error);
     }
 }
+
+    async initializeClientComponents() {
+    this.timestamp = '2025-03-24 13:49:43';
+    this.userLogin = 'Yldrm2015';
     
         // Client-Side Özel Başlatma
         async initializeClientComponents() {
