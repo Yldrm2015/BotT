@@ -253,6 +253,96 @@ class BotDetectionSystem {
             this.serverLog(logEntry);
         }
     }
+
+    setupClientEventListeners() {
+    try {
+        // Mouse hareketlerini izle
+        document.addEventListener('mousemove', (event) => {
+            if (!this.state.initialized) return;
+            
+            const mouseData = {
+                type: 'mouse',
+                x: event.clientX,
+                y: event.clientY,
+                timestamp: Date.now()
+            };
+            
+            if (this.state.mode.clientSide) {
+                this.processMouseMovement(mouseData);
+            }
+        });
+
+        // Klavye aktivitesini izle
+        document.addEventListener('keydown', (event) => {
+            if (!this.state.initialized) return;
+            
+            const keyData = {
+                type: 'keyboard',
+                key: event.key,
+                timestamp: Date.now()
+            };
+            
+            if (this.state.mode.clientSide) {
+                this.processKeyboardEvent(keyData);
+            }
+        });
+
+        // Scroll olaylarını izle
+        document.addEventListener('scroll', () => {
+            if (!this.state.initialized) return;
+            
+            const scrollData = {
+                type: 'scroll',
+                position: window.scrollY,
+                timestamp: Date.now()
+            };
+            
+            if (this.state.mode.clientSide) {
+                this.processScrollEvent(scrollData);
+            }
+        });
+
+        console.log(`[${this.timestamp}] Client event listeners initialized`);
+        return true;
+    } catch (error) {
+        console.error(`[${this.timestamp}] Failed to setup client event listeners:`, error);
+        return false;
+    }
+}
+
+// Yardımcı metodları da ekleyelim
+processMouseMovement(data) {
+    try {
+        // Mouse hareketi işleme
+        if (this.state.mode.clientSide && this.clientState?.data?.behavioral) {
+            this.clientState.data.behavioral.push(data);
+        }
+    } catch (error) {
+        console.error(`[${this.timestamp}] Mouse movement processing error:`, error);
+    }
+}
+
+processKeyboardEvent(data) {
+    try {
+        // Klavye olayı işleme
+        if (this.state.mode.clientSide && this.clientState?.data?.behavioral) {
+            this.clientState.data.behavioral.push(data);
+        }
+    } catch (error) {
+        console.error(`[${this.timestamp}] Keyboard event processing error:`, error);
+    }
+}
+
+processScrollEvent(data) {
+    try {
+        // Scroll olayı işleme
+        if (this.state.mode.clientSide && this.clientState?.data?.behavioral) {
+            this.clientState.data.behavioral.push(data);
+        }
+    } catch (error) {
+        console.error(`[${this.timestamp}] Scroll event processing error:`, error);
+    }
+}
     
         // Client-Side Özel Başlatma
         async initializeClientComponents() {
