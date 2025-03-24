@@ -1,109 +1,119 @@
 const express = require('express');
 const path = require('path');
 const bodyParser = require('body-parser');
-
-// BotTJS modüllerini import et
 const BotDetectionSystem = require('./BotTJS/BotT');
 const SecurityValidator = require('./BotTJS/SecurityValidator');
-const AlertManager = require('./BotTJS/AlertManager');
-const ApiManager = require('./BotTJS/ApiManager');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Sistem instanceları
-const botDetectionSystem = new BotDetectionSystem();
+// Bot Detection System ve Security Validator instanceları
+const botDetector = new BotDetectionSystem();
 const securityValidator = new SecurityValidator();
-const alertManager = new AlertManager();
-const apiManager = new ApiManager();
 
 // Middleware
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'BotTJS')));
+app.use(express.static('BotTJS'));
 
-// Timestamp ve user bilgisi için middleware
+// Global timestamp ve user bilgisi middleware
 app.use((req, res, next) => {
-    req.timestamp = '2025-03-24 11:32:08';
+    req.timestamp = '2025-03-24 11:57:58';
     req.userLogin = 'Yldrm2015';
     next();
 });
 
-// Ana sayfa route'u
+// Ana sayfa
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'BotTJS', 'index.html'));
 });
 
-// Bot detection API endpoint'leri
+// Bot Detection API Endpoints
 app.post('/api/bot-detection/verify', async (req, res) => {
     try {
-        const result = await botDetectionSystem.detect(req);
-        res.json(result);
+        const behavioralData = req.body;
+        const result = await botDetector.analyze(behavioralData);
+        res.json({
+            status: 'success',
+            timestamp: req.timestamp,
+            userLogin: req.userLogin,
+            result: result
+        });
     } catch (error) {
-        console.error('Bot detection error:', error);
-        res.status(500).json({ error: 'Bot detection failed' });
+        res.status(500).json({ error: 'Bot detection analysis failed' });
     }
 });
 
-app.post('/api/bot-detection/report', async (req, res) => {
-    try {
-        const report = await botDetectionSystem.report(req.body);
-        res.json(report);
-    } catch (error) {
-        console.error('Report generation error:', error);
-        res.status(500).json({ error: 'Report generation failed' });
-    }
-});
-
-app.get('/api/bot-detection/status', async (req, res) => {
-    try {
-        const status = botDetectionSystem.getSystemStatus();
-        res.json(status);
-    } catch (error) {
-        console.error('Status check error:', error);
-        res.status(500).json({ error: 'Status check failed' });
-    }
-});
-
-// Security validation endpoints
 app.post('/api/security/validate', async (req, res) => {
     try {
-        const validationResult = await securityValidator.validate(req);
-        res.json(validationResult);
+        const validationResult = await securityValidator.validate(req.body);
+        res.json({
+            status: 'success',
+            timestamp: req.timestamp,
+            validation: validationResult
+        });
     } catch (error) {
-        console.error('Security validation error:', error);
         res.status(500).json({ error: 'Security validation failed' });
     }
 });
 
-// Alert management endpoints
-app.post('/api/alerts', async (req, res) => {
+app.get('/api/bot-detection/status', (req, res) => {
+    const status = botDetector.getStatus();
+    res.json({
+        status: status,
+        timestamp: req.timestamp,
+        userLogin: req.userLogin
+    });
+});
+
+app.post('/api/bot-detection/report', async (req, res) => {
     try {
-        const alert = await alertManager.createAlert(req.body);
-        res.json(alert);
+        const reportData = await botDetector.generateReport(req.body);
+        res.json({
+            status: 'success',
+            timestamp: req.timestamp,
+            report: reportData
+        });
     } catch (error) {
-        console.error('Alert creation error:', error);
-        res.status(500).json({ error: 'Alert creation failed' });
+        res.status(500).json({ error: 'Report generation failed' });
     }
 });
 
-app.get('/api/alerts', async (req, res) => {
+// WebSocket bağlantısı için endpoint
+app.ws('/api/realtime', (ws, req) => {
+    console.log('New WebSocket connection established');
+    
+    ws.on('message', async (msg) => {
+        const data = JSON.parse(msg);
+        const result = await botDetector.analyzeRealtime(data);
+        ws.send(JSON.stringify(result));
+    });
+});
+
+// ML model güncelleme endpoint'i
+app.post('/api/ml/update', async (req, res) => {
     try {
-        const alerts = await alertManager.getAlerts();
-        res.json(alerts);
+        const updateResult = await botDetector.updateMLModels();
+        res.json({
+            status: 'success',
+            timestamp: req.timestamp,
+            update: updateResult
+        });
     } catch (error) {
-        console.error('Alert retrieval error:', error);
-        res.status(500).json({ error: 'Alert retrieval failed' });
+        res.status(500).json({ error: 'ML model update failed' });
     }
 });
 
-// API yönetimi endpoints
-app.post('/api/config', async (req, res) => {
+// Pattern veritabanı güncelleme endpoint'i
+app.post('/api/patterns/update', async (req, res) => {
     try {
-        const config = await apiManager.updateConfig(req.body);
-        res.json(config);
+        const updateResult = await botDetector.updatePatternDatabase(req.body);
+        res.json({
+            status: 'success',
+            timestamp: req.timestamp,
+            update: updateResult
+        });
     } catch (error) {
-        console.error('Config update error:', error);
-        res.status(500).json({ error: 'Config update failed' });
+        res.status(500).json({ error: 'Pattern database update failed' });
     }
 });
 
@@ -112,31 +122,48 @@ app.use((err, req, res, next) => {
     console.error('Server error:', err);
     res.status(500).json({
         error: 'Internal server error',
-        timestamp: req.timestamp,
-        user: req.userLogin
+        timestamp: req.timestamp
     });
 });
 
 // Server'ı başlat
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
-    console.log(`Current timestamp: ${botDetectionSystem.timestamp}`);
-    console.log(`Current user: ${botDetectionSystem.userLogin}`);
+    console.log(`Bot Detection System Version: ${botDetector.version}`);
+    console.log(`Current timestamp: ${botDetector.timestamp}`);
+    console.log(`Current user: ${botDetector.userLogin}`);
     
-    // Sistem durumunu logla
-    const status = botDetectionSystem.getSystemStatus();
-    console.log('System status:', status);
-    
-    // Security kontrollerini başlat
-    securityValidator.initializeSecurityControls()
-        .then(() => console.log('Security controls initialized'))
-        .catch(err => console.error('Security initialization error:', err));
+    // Bot Detection System'i başlat
+    botDetector.initialize()
+        .then(() => {
+            console.log('Bot Detection System initialized successfully');
+            // ML modellerini yükle
+            return botDetector.loadMLModels();
+        })
+        .then(() => {
+            console.log('ML models loaded successfully');
+            // Pattern veritabanını yükle
+            return botDetector.loadPatternDatabase();
+        })
+        .then(() => {
+            console.log('Pattern database loaded successfully');
+            // Security kontrollerini başlat
+            return securityValidator.initialize();
+        })
+        .then(() => {
+            console.log('Security validator initialized successfully');
+            console.log('System is ready to detect bots!');
+        })
+        .catch(error => {
+            console.error('Initialization error:', error);
+            process.exit(1);
+        });
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
     console.log('SIGTERM received. Shutting down gracefully...');
-    botDetectionSystem.cleanup()
+    botDetector.cleanup()
         .then(() => {
             console.log('Bot detection system cleaned up');
             process.exit(0);
