@@ -1,1 +1,19 @@
-
+{
+  "name": "bot-detection-system",
+  "version": "1.0.0",
+  "description": "Bot Detection System for Security Analysis",
+  "main": "index.html",
+  "scripts": {
+    "start": "serve -s .",
+    "build": "echo 'No build required'"
+  },
+  "dependencies": {
+    "serve": "^14.2.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Yldrm2015/BotT"
+  },
+  "author": "Yldrm2015",
+  "license": "MIT"
+}
