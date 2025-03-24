@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot Detection System Tester</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .panel {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .panel h2 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .metric {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+        }
+        .metric-name {
+            flex: 1;
+            font-weight: bold;
+        }
+        .metric-value {
+            flex: 2;
+        }
+        .passed {
+            color: green;
+        }
+        .failed {
+            color: red;
+        }
+        .neutral {
+            color: #666;
+        }
+        .progress-bar {
+            height: 20px;
+            background-color: #eee;
+            border-radius: 10px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+        .progress-value {
+            height: 100%;
+            background-color: #4CAF50;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        #status-indicator {
+            font-size: 1.2em;
+            text-align: center;
+            padding: 10px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #log-panel {
+            height: 300px;
+            overflow-y: auto;
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+        .timestamp {
+            color: #999;
+            font-size: 0.8em;
+        }
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        input, textarea {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .activity-area {
+            height: 200px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Bot Detection System Tester</h1>
+            <p>Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): <span id="current-date">2025-03-24 08:33:56</span></p>
+            <p>Current User's Login: <span id="current-user">Yldrm2015</span></p>
+            <p>Interact with this page to test the bot detection features</p>
+        </header>
+        
+        <div id="status-indicator" style="background-color: #FFF3CD;">Analyzing behavior...</div>
+        
+        <div class="actions">
+            <button id="run-detection">Run Detection</button>
+            <button id="reset-metrics">Reset Metrics</button>
+            <button id="simulate-bot">Simulate Bot Activity</button>
+        </div>
+        
+        <div class="dashboard">
+            <div class="panel">
+                <h2>Behavioral Analysis</h2>
+                <div class="metric">
+                    <div class="metric-name">Mouse Movement Naturalness:</div>
+                    <div class="metric-value">
+                        <span id="mouse-naturalness-value">Waiting...</span>
+                        <div class="progress-bar">
+                            <div id="mouse-naturalness-bar" class="progress-value"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="metric">
+                    <div class="metric-name">Scroll Behavior:</div>
+                    <div class="metric-value">
+                        <span id="scroll-behavior-value">Waiting...</span>
+                        <div class="progress-bar">
+                            <div id="scroll-behavior-bar" class="progress-value"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="metric">
+                    <div class="metric-name">Keystroke Naturalness:</div>
+                    <div class="metric-value">
+                        <span id="keystroke-naturalness-value">Waiting...</span>
+                        <div class="progress-bar">
+                            <div id="keystroke-naturalness-bar" class="progress-value"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="metric">
+                    <div class="metric-name">Interaction Timing:</div>
+                    <div class="metric-value">
+                        <span id="interaction-timing-value">Waiting...</span>
+                        <div class="progress-bar">
+                            <div id="interaction-timing-bar" class="progress-value"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="metric">
+                    <div class="metric-name">Copy/Paste Count:</div>
+                    <div class="metric-value" id="copy-paste-count">0</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-name">Page Focus Time:</div>
+                    <div class="metric-value" id="page-focus-time">0 seconds</div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h2>Fingerprinting Results</h2>
+                <div class="metric">
+                    <div class="metric-name">WebGL Fingerprint:</div>
+                    <div class="metric-value" id="webgl-fingerprint">Waiting...</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-name">Canvas Fingerprint:</div>
+                    <div class="metric-value" id="canvas-fingerprint">Waiting...</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-name">Audio Fingerprint:</div>
+                    <div class="metric-value" id="audio-fingerprint">Waiting...</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-name">Screen Metrics:</div>
+                    <div class="metric-value" id="screen-metrics">Waiting...</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-name">Detected Fonts:</div>
+                    <div class="metric-value" id="detected-fonts">Waiting...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>Security Status</h2>
+            <div class="metric">
+                <div class="metric-name">Security Violations:</div>
+                <div class="metric-value" id="security-violations">0</div>
+            </div>
+            <div class="metric">
+                <div class="metric-name">Last Check:</div>
+                <div class="metric-value" id="last-security-check">-</div>
+            </div>
+        </div>
+    </div>
+        
+        <div class="panel">
+            <h2>Network Information</h2>
+            <div class="metric">
+                <div class="metric-name">IP Address:</div>
+                <div class="metric-value" id="ip-address">Detecting...</div>
+            </div>
+            <div class="metric">
+                <div class="metric-name">Connection Type:</div>
+                <div class="metric-value" id="connection-type">Detecting...</div>
+            </div>
+            <div class="metric">
+                <div class="metric-name">WebRTC Leaks:</div>
+                <div class="metric-value" id="webrtc-leaks">Checking...</div>
+            </div>
+            <div class="metric">
+                <div class="metric-name">Connection Speed:</div>
+                <div class="metric-value" id="connection-speed">Measuring...</div>
+            </div>
+        </div>
+        
+        <div class="activity-area" id="mouse-activity-area">
+            Move your mouse around in this area
+        </div>
+        
+        <div class="activity-area" id="keystroke-activity-area" tabindex="0">
+            Click here and type something to test keystroke analysis
+        </div>
+        
+        <form id="test-form">
+            <h2>Test Form (with honeypot)</h2>
+            <input type="text" placeholder="Name" name="name">
+            <input type="email" placeholder="Email" name="email">
+            <textarea placeholder="Message" name="message"></textarea>
+            <!-- No submit button - we'll handle submission via JavaScript -->
+        </form>
+        
+        <div class="panel">
+            <h2>Event Log</h2>
+            <div id="log-panel"></div>
+        </div>
+    </div>
+
+<!-- SecurityValidator'ı ekle -->
+<script src="SecurityValidator.js"></script>
+
+<script src="./BotT.js"></script>
+
+<!-- <script src="ApiManager.js"></script> -->
+
+<!-- Entegrasyon script'i -->
+<script>
+    const currentDate = "2025-03-21 14:19:43";
+    const currentUser = "Yldrm2015";
+
+    const securityValidator = new SecurityValidator();
+    const botDetector = new BotDetectionSystem();
+
+    document.addEventListener('DOMContentLoaded', () => {
+        try {
+            // Mevcut tarih ve kullanıcı bilgisini göster
+            document.getElementById('current-date').textContent = currentDate;
+            document.getElementById('current-user').textContent = currentUser;
+
+            // Event listeners
+            document.getElementById('run-detection')?.addEventListener('click', async () => {
+                const botResults = await botDetector.analyze();
+                const securityResults = await securityValidator.analyze();
+                updateUI(botResults, securityResults);
+            });
+
+            document.getElementById('reset-metrics')?.addEventListener('click', () => {
+                botDetector.reset();
+                securityValidator.reset();
+                clearUI();
+            });
+
+            console.log('Security system initialized');
+        } catch (error) {
+            console.error('Initialization error:', error);
+        }
+    });
+
+    function updateUI(botResults, securityResults) {
+        // Bot detection sonuçları
+        document.getElementById('mouse-naturalness-value').textContent = 
+            botResults.behavioral.mouseMovement ? 'Natural' : 'Suspicious';
+        document.getElementById('mouse-naturalness-bar').style.width = 
+            `${botResults.behavioral.mouseMovement * 100}%`;
+
+        // Security validator sonuçları
+        document.getElementById('security-violations').textContent = 
+            securityResults.violations.length;
+        document.getElementById('last-security-check').textContent = 
+            new Date(securityResults.timestamp).toLocaleString();
+
+        // Log paneli güncelleme
+        const logPanel = document.getElementById('log-panel');
+        const logEntry = document.createElement('div');
+        logEntry.className = 'log-entry';
+        logEntry.innerHTML = `
+            <span class="timestamp">${new Date().toLocaleString()}</span>
+            <div>Bot Score: ${botResults.score.toFixed(2)}</div>
+            <div>Security Status: ${securityResults.violations.length === 0 ? 'Clean' : 'Violations Found'}</div>
+        `;
+        logPanel.insertBefore(logEntry, logPanel.firstChild);
+    }
+
+    function clearUI() {
+        document.getElementById('mouse-naturalness-value').textContent = 'Waiting...';
+        document.getElementById('mouse-naturalness-bar').style.width = '0%';
+    }
+</script>
+</body>
+</html>
