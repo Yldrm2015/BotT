@@ -2,13 +2,13 @@
   "name": "bot-detection-system",
   "version": "1.0.0",
   "description": "Bot Detection System for Security Analysis",
-  "main": "index.html",
+  "main": "server.js",
   "scripts": {
-    "start": "serve -s .",
+    "start": "node server.js",
     "build": "echo 'No build required'"
   },
   "dependencies": {
-    "serve": "^14.2.1"
+    "express": "^4.17.1"
   },
   "repository": {
     "type": "git",
