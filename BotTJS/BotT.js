@@ -143,30 +143,33 @@ class BotDetectionSystem {
         console.log(`[${this.timestamp}] BotDetectionSystem reset completed by ${this.userLogin}`);
     }
 
-    async initializeSystem() {
-        try {
-            // Core bileşenleri başlat
-            await this.initializeCoreComponents();
+   async initializeSystem() {
+    try {
+        // Timestamp güncelle
+        this.timestamp = '2025-03-24 13:23:58';
+        
+        // Core bileşenleri başlat
+        await this.initializeCoreComponents();
+        
+        // Client-side kontrolü
+        if (typeof window !== 'undefined') {
+            // Sadece client-side bileşenleri başlat
+            await this.initializeClientComponents();
             
-            // Mod'a göre özel bileşenleri başlat
-            if (this.state.mode.clientSide) {
-                await this.initializeClientComponents();
-            }
-            if (this.state.mode.serverSide) {
-                await this.initializeServerComponents();
-            }
-
-            // Güvenlik kontrollerini başlat
-            await this.initializeSecurityControls();
-
-            this.state.initialized = true;
-            this.log('info', 'System initialized successfully');
-        } catch (error) {
-            this.log('error', 'System initialization failed', error);
-            throw new Error('BotDetectionSystem initialization failed');
+            // Event listener'ları başlat
+            this.setupClientEventListeners();
         }
-    }
 
+        this.state.initialized = true;
+        this.log('info', 'System initialized successfully');
+        return true;
+    } catch (error) {
+        this.log('error', 'System initialization failed', error);
+        console.error('Initialization error:', error);
+        return false; // throw yerine false dön
+    }
+}
+    
   async initializeCoreComponents() {
     try {
         // Basit mock sınıflar oluştur
