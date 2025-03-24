@@ -2,9 +2,9 @@
   "name": "bot-detection-system",
   "version": "1.0.0",
   "description": "Bot Detection System for Security Analysis",
-  "main": "server.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node src/server.js",
     "build": "echo 'No build required'"
   },
   "dependencies": {
