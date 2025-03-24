@@ -167,8 +167,39 @@ class BotDetectionSystem {
         }
     }
 
-    async initializeCoreComponents() {
-        // Ana bileşenleri oluştur
+  async initializeCoreComponents() {
+    try {
+        // Basit mock sınıflar oluştur
+        class NetworkAnalysis {
+            constructor() { }
+            analyze() { return { score: 0.95 }; }
+        }
+        class SessionManager {
+            constructor() { }
+            manage() { return true; }
+        }
+        class SecurityValidator {
+            constructor() { }
+            validate() { return { valid: true }; }
+        }
+        class PatternAnalyzer {
+            constructor() { }
+            analyze() { return { patterns: [] }; }
+        }
+        class AlertManager {
+            constructor() { }
+            createAlert() { return true; }
+        }
+        class BotClassifier {
+            constructor() { }
+            classifyBot() { return { isBot: false }; }
+        }
+        class BotPolicyManager {
+            constructor() { }
+            evaluatePolicy() { return { action: 'allow' }; }
+        }
+
+        // Bileşenleri oluştur
         this.state.components.set('networkAnalysis', new NetworkAnalysis());
         this.state.components.set('sessionManager', new SessionManager());
         this.state.components.set('securityValidator', new SecurityValidator());
@@ -176,7 +207,13 @@ class BotDetectionSystem {
         this.state.components.set('alertManager', new AlertManager());
         this.state.components.set('botClassifier', new BotClassifier());
         this.state.components.set('botPolicyManager', new BotPolicyManager());
+        
+        return true;
+    } catch (error) {
+        this.log('error', 'Core components initialization failed', error);
+        return false;
     }
+}
 
     determineOperationMode() {
         const isClient = typeof window !== 'undefined';
