@@ -1,5 +1,3 @@
-import { launch } from "puppeteer";
-
 class BotDetectionSystem {
     constructor() {
         this.timestamp = '2025-03-17 09:08:07';
