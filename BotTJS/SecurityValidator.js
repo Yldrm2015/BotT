@@ -246,33 +246,47 @@
 
         async initialize() {
             try {
-                // Secure context kontrolü
+                // Başlangıç kontrolü
+                if (this.validationState.initialized) {
+                    console.log(`[${this.timestamp}] SecurityValidator already initialized`);
+                    return;
+                }
+    
+                // Ana güvenlik kontrollerini başlat
                 if (!window.isSecureContext) {
                     throw new Error('Secure context required');
                 }
-
-                // HTTPS zorunluluğu kontrolü
+    
                 if (this.validationConfig.https.required && 
                     window.location.protocol !== 'https:') {
                     this.upgradeToHttps();
                     return;
                 }
-
-                // Header validation başlat
-                await this.initializeHeaderValidation();
-
-                // CSP monitoring başlat
-                this.initializeCSPMonitoring();
-
-                // Event listeners
-                this.setupEventListeners();
-
-                this.validationState.initialized = true;
-                console.log(`[${this.timestamp}] SecurityValidator initialized`);
-
+    
+                try {
+                    // Core bileşenleri başlat
+                    await this.initializeHeaderValidation();
+                    await this.initializeCSPMonitoring();
+                    await this.setupEventListeners();
+    
+                    // Alt validator'ları başlat
+                    await Promise.all([
+                        this.tokenValidator.initialize(),
+                        this.contentValidator.initialize(),
+                        this.realtimeValidator.initialize()
+                    ]);
+    
+                    this.validationState.initialized = true;
+                    console.log(`[${this.timestamp}] SecurityValidator initialized successfully`);
+                } catch (initError) {
+                    console.warn(`[${this.timestamp}] Component initialization warning:`, initError);
+                }
+    
             } catch (error) {
                 console.error(`[${this.timestamp}] Initialization failed:`, error);
                 this.handleInitializationError(error);
+                this.validationState.initialized = true;
+                this.validationState.initializationWarnings = true;
             }
         }
 
@@ -297,7 +311,7 @@
             await this.validateCurrentPageHeaders();
         }
 
-        validateResourceHeadersvalidateResourceHeaders(resource) {
+        validateResourceHeaders(resource) {
             try {
                 if (!resource || !resource.name) return;
         
@@ -1275,48 +1289,6 @@
             this.initialize();
         }
 
-        async initialize() {
-            try {
-                // Başlangıç kontrolü
-                if (this.validationState.initialized) {
-                    console.log(`[${this.timestamp}] SecurityValidator already initialized`);
-                    return;
-                }
-        
-                // Secure context kontrolü
-                if (!window.isSecureContext) {
-                    throw new Error('Secure context required');
-                }
-        
-                // HTTPS zorunluluğu kontrolü
-                if (this.validationConfig.https.required && 
-                    window.location.protocol !== 'https:') {
-                    this.upgradeToHttps();
-                    return;
-                }
-        
-                try {
-                    // Core bileşenlerin başlatılması
-                    await this.initializeHeaderValidation();
-                    await this.initializeCSPMonitoring();
-                    await this.setupEventListeners();
-        
-                    this.validationState.initialized = true;
-                    console.log(`[${this.timestamp}] SecurityValidator initialized successfully`);
-                } catch (initError) {
-                    console.warn(`[${this.timestamp}] Component initialization warning:`, initError);
-                    // Kritik olmayan hataları loglayalım ama sistemin çalışmasına izin verelim
-                }
-        
-            } catch (error) {
-                console.error(`[${this.timestamp}] Initialization failed:`, error);
-                this.handleInitializationError(error);
-                // Kritik hatalarda bile sistemi tamamen durdurmayalım
-                this.validationState.initialized = true;
-                this.validationState.initializationWarnings = true;
-            }
-        }
-
         async initializeStorage() {
             const storage = this.authConfig.storage.type === 'localStorage' ? 
                           localStorage : sessionStorage;
@@ -1672,31 +1644,6 @@
             this.initialize();
         }
 
-        async initialize() {
-            try {
-                // Content scanner worker başlat
-                if (window.Worker) {
-                    this.initializeScanner();
-                }
-
-                // DOM mutation observer başlat
-                this.initializeDOMObserver();
-
-                // Input event listeners
-                this.setupInputValidation();
-
-                // File upload handlers
-                this.setupFileValidation();
-
-                this.validationState.initialized = true;
-                console.log(`[${this.timestamp}] ContentSecurityValidator initialized`);
-
-            } catch (error) {
-                console.error(`[${this.timestamp}] Content security initialization failed:`, error);
-                this.handleInitializationError(error);
-            }
-        }
-
         initializeScanner() {
             try {
                 this.scannerWorker = new Worker('contentScanner.worker.js');
@@ -2031,31 +1978,6 @@
             };
 
             this.initialize();
-        }
-
-        async initialize() {
-            try {
-                // Rate limiter başlat
-                this.initializeRateLimiter();
-
-                // Real-time monitoring başlat
-                await this.initializeMonitoring();
-
-                // WebSocket bağlantısı
-                if (this.realtimeConfig.realtime.websocket.enabled) {
-                    await this.initializeWebSocket();
-                }
-
-                // Protection sistemi
-                this.initializeProtection();
-
-                this.state.initialized = true;
-                console.log(`[${this.timestamp}] RealTimeSecurityValidator initialized`);
-
-            } catch (error) {
-                console.error(`[${this.timestamp}] Real-time security initialization failed:`, error);
-                this.handleInitializationError(error);
-            }
         }
 
         initializeRateLimiter() {
