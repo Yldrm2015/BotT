@@ -271,6 +271,26 @@
             await this.validateCurrentPageHeaders();
         }
 
+        validateResourceHeaders(resource) {
+            try {
+                if (!resource || !resource.name) return;
+        
+                const headers = resource.headers || {};
+                const missing = this.validationConfig.headers.required
+                    .filter(header => !headers[header.toLowerCase()]);
+        
+                if (missing.length > 0) {
+                    this.handleValidationError('resource_headers', new Error(`Missing headers: ${missing.join(', ')}`));
+                    return false;
+                }
+        
+                return true;
+            } catch (error) {
+                this.handleValidationError('resource_headers', error);
+                return false;
+            }
+        }
+
         async validateCurrentPageHeaders() {
             const startTime = performance.now();
 
@@ -295,7 +315,7 @@
             const missing = this.findMissingHeaders(headers);
             const invalid = this.findInvalidHeaderValues(headers);
             const warnings = this.checkRecommendedHeaders(headers);
-
+        
             const result = {
                 valid: missing.length === 0 && invalid.length === 0,
                 missing,
@@ -303,18 +323,29 @@
                 warnings,
                 timestamp: this.timestamp
             };
-
+        
             // Critical headers eksik ise
             if (missing.length > 0) {
                 this.handleMissingHeaders(missing);
             }
-
+        
             // Header değerleri invalid ise
             if (invalid.length > 0) {
                 this.handleInvalidHeaders(invalid);
             }
-
+        
             return result;
+        }
+        
+        // handleMissingHeaders fonksiyonunu sınıfın üye fonksiyonu olarak tanımla
+        handleMissingHeaders(missing) {
+            console.error(`[${this.timestamp}] Missing required headers:`, missing);
+            const violation = {
+                type: 'missing_headers',
+                headers: missing,
+                timestamp: this.timestamp
+            };
+            this.validationState.violations.push(violation);
         }
 
         findMissingHeaders(headers) {
@@ -356,10 +387,15 @@
         applyCSP() {
             const csp = this.buildCSPHeader();
             
-            // Meta tag ile CSP uygula
+            // Meta tag ile CSP uygula ama frame-ancestors ve report-uri hariç
+            const metaCsp = csp
+                .split(';')
+                .filter(directive => !directive.includes('frame-ancestors') && !directive.includes('report-uri'))
+                .join(';');
+            
             const meta = document.createElement('meta');
             meta.httpEquiv = 'Content-Security-Policy';
-            meta.content = csp;
+            meta.content = metaCsp;
             document.head.appendChild(meta);
         }
 
@@ -370,6 +406,28 @@
                 )
                 .concat(`report-uri ${this.validationConfig.csp.reportUri}`)
                 .join('; ');
+        }
+
+        setupXHRInterceptor() {
+            const originalOpen = XMLHttpRequest.prototype.open;
+            const originalSend = XMLHttpRequest.prototype.send;
+            const self = this;
+        
+            XMLHttpRequest.prototype.open = function(method, url, ...args) {
+                this._securityData = {
+                    method,
+                    url,
+                    timestamp: this.timestamp
+                };
+                return originalOpen.apply(this, [method, url, ...args]);
+            };
+        
+            XMLHttpRequest.prototype.send = function(data) {
+                if (self.validateRequest(this._securityData)) {
+                    return originalSend.apply(this, [data]);
+                }
+                throw new Error('Request blocked by security policy');
+            };
         }
 
         setupEventListeners() {
