@@ -726,7 +726,6 @@ class BotDetectionSystem {
             message,
             sessionId: this.state.sessionId,
             mode: this.state.mode,
-            user: 'Yldrm2015',
             ...data
         };
 
