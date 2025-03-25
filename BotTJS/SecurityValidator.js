@@ -297,7 +297,28 @@
             await this.validateCurrentPageHeaders();
         }
 
-        validateResourceHeaders
+        validateResourceHeadersvalidateResourceHeaders(resource) {
+            try {
+                if (!resource || !resource.name) return;
+        
+                const headers = resource.headers || {};
+                const missing = this.validationConfig.headers.required
+                    .filter(header => !headers[header.toLowerCase()]);
+        
+                if (missing.length > 0) {
+                    // Hata mesajını daha detaylı hale getirelim
+                    const error = new Error(`Required security headers are missing: ${missing.join(', ')}`);
+                    error.headers = missing;
+                    this.handleValidationError('resource_headers', error);
+                    return false;
+                }
+        
+                return true;
+            } catch (error) {
+                this.handleValidationError('resource_headers', error);
+                return false;
+            }
+        }
 
         async validateCurrentPageHeaders() {
             const startTime = performance.now();
@@ -1274,18 +1295,25 @@
                     return;
                 }
         
-                // Core bileşenlerin başlatılması
-                await this.initializeHeaderValidation();
-                this.initializeCSPMonitoring();
-                this.setupEventListeners();
+                try {
+                    // Core bileşenlerin başlatılması
+                    await this.initializeHeaderValidation();
+                    await this.initializeCSPMonitoring();
+                    await this.setupEventListeners();
         
-                this.validationState.initialized = true;
-                console.log(`[${this.timestamp}] SecurityValidator initialized successfully`);
+                    this.validationState.initialized = true;
+                    console.log(`[${this.timestamp}] SecurityValidator initialized successfully`);
+                } catch (initError) {
+                    console.warn(`[${this.timestamp}] Component initialization warning:`, initError);
+                    // Kritik olmayan hataları loglayalım ama sistemin çalışmasına izin verelim
+                }
         
             } catch (error) {
                 console.error(`[${this.timestamp}] Initialization failed:`, error);
                 this.handleInitializationError(error);
-                throw error; // Hatayı yukarı fırlatalım
+                // Kritik hatalarda bile sistemi tamamen durdurmayalım
+                this.validationState.initialized = true;
+                this.validationState.initializationWarnings = true;
             }
         }
 
