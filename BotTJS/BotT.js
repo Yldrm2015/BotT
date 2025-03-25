@@ -198,7 +198,7 @@ class BotDetectionSystem {
 
         this.log('info', 'System reset completed');
     }
-}
+
 
     // Event Management Methods
     setupClientEventListeners() {
@@ -384,7 +384,7 @@ class BotDetectionSystem {
             timeWindow: 300000 // 5 minutes
         });
     }
-}
+
 
 // Ana Detection Metodları
     async detect(request) {
