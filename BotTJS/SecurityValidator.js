@@ -218,6 +218,32 @@
             console.log(`[${this.timestamp}] SecurityValidator reset completed by ${this.userLogin}`);
         }
 
+        validateRequest(requestData) {
+            try {
+                const { url, method } = requestData;
+                
+                // Path validation
+                if (!this.validatePath(new URL(url, window.location.origin).pathname)) {
+                    return false;
+                }
+    
+                // Rate limit check
+                if (!this.checkRateLimit(url)) {
+                    return false;
+                }
+    
+                // Bot detection
+                if (this.detectBot()) {
+                    return false;
+                }
+    
+                return true;
+            } catch (error) {
+                this.handleValidationError('request_validation', error);
+                return false;
+            }
+        }
+
         async initialize() {
             try {
                 // Secure context kontrolü
@@ -271,25 +297,7 @@
             await this.validateCurrentPageHeaders();
         }
 
-        validateResourceHeaders(resource) {
-            try {
-                if (!resource || !resource.name) return;
-        
-                const headers = resource.headers || {};
-                const missing = this.validationConfig.headers.required
-                    .filter(header => !headers[header.toLowerCase()]);
-        
-                if (missing.length > 0) {
-                    this.handleValidationError('resource_headers', new Error(`Missing headers: ${missing.join(', ')}`));
-                    return false;
-                }
-        
-                return true;
-            } catch (error) {
-                this.handleValidationError('resource_headers', error);
-                return false;
-            }
-        }
+        validateResourceHeaders
 
         async validateCurrentPageHeaders() {
             const startTime = performance.now();
@@ -475,6 +483,32 @@
             // AJAX request interceptor
             this.setupXHRInterceptor();
             this.setupFetchInterceptor();
+        }
+
+        setupFetchInterceptor() {
+            const originalFetch = window.fetch;
+            const self = this;
+        
+            window.fetch = async (input, init) => {
+                const url = input instanceof Request ? input.url : input;
+        
+                try {
+                    // Request validation
+                    if (!self.validateRequest({ url, method: init?.method || 'GET' })) {
+                        throw new Error('Request blocked by security policy');
+                    }
+        
+                    const response = await originalFetch(input, init);
+                    
+                    // Response validation
+                    await self.validateResourceHeaders(response);
+        
+                    return response;
+                } catch (error) {
+                    self.handleValidationError('fetch', error);
+                    throw error;
+                }
+            };
         }
 
         validateElement(element) {
@@ -1222,27 +1256,36 @@
 
         async initialize() {
             try {
-                // Storage initialize
-                await this.initializeStorage();
-
-                // Token monitoring başlat
-                this.startTokenMonitoring();
-
-                // Session monitoring başlat
-                this.startSessionMonitoring();
-
-                        // API health check
-                        const apiStatus = await this.checkApiHealth();
-                        if (!apiStatus) {
-                            console.warn(`[${this.timestamp}] API connection failed`);
-                        }
-
+                // Başlangıç kontrolü
+                if (this.validationState.initialized) {
+                    console.log(`[${this.timestamp}] SecurityValidator already initialized`);
+                    return;
+                }
+        
+                // Secure context kontrolü
+                if (!window.isSecureContext) {
+                    throw new Error('Secure context required');
+                }
+        
+                // HTTPS zorunluluğu kontrolü
+                if (this.validationConfig.https.required && 
+                    window.location.protocol !== 'https:') {
+                    this.upgradeToHttps();
+                    return;
+                }
+        
+                // Core bileşenlerin başlatılması
+                await this.initializeHeaderValidation();
+                this.initializeCSPMonitoring();
+                this.setupEventListeners();
+        
                 this.validationState.initialized = true;
-                console.log(`[${this.timestamp}] TokenAuthValidator initialized`);
-
+                console.log(`[${this.timestamp}] SecurityValidator initialized successfully`);
+        
             } catch (error) {
-                console.error(`[${this.timestamp}] Token/Auth initialization failed:`, error);
+                console.error(`[${this.timestamp}] Initialization failed:`, error);
                 this.handleInitializationError(error);
+                throw error; // Hatayı yukarı fırlatalım
             }
         }
 
