@@ -1,11 +1,14 @@
 (function(window) {
     'use strict';
 
-    class SecurityValidator {
-        timestamp = '2025-03-17 11:38:13';
-        userLogin = 'Yldrm2015';
+    if (!window.SecurityValidator) {
+        window.SecurityValidator = {};
+    }
 
+    class SecurityValidator {
+     
         constructor() {
+            this.timestamp = this.getCurrentTimestamp();
             // Temel güvenlik konfigürasyonu
             this.validationConfig = {
                 headers: {
@@ -200,15 +203,146 @@
             this.tokenValidator = new TokenAuthValidator(this);
             this.contentValidator = new ContentSecurityValidator(this);
             this.realtimeValidator = new RealTimeSecurityValidator(this);
-            
+
+            this.initializeValidators();
             this.initialize();
+        }
+
+        handleValidationError(type, error, source = 'main') {
+            const currentTime = this.getCurrentTimestamp();
+            const currentUser = this.getCurrentUser();
+            
+            // Konsola log
+            console.error(`[${currentTime}] Validation error (${type}) from ${source}:`, error);
+            
+            // Violation kaydı
+            const violation = {
+                type,
+                source,
+                error: error.message,
+                timestamp: currentTime,
+                user: currentUser,
+                details: {
+                    stack: error.stack,
+                    code: error.code
+                }
+            };
+    
+            // State güncelleme
+            this.validationState.violations.push(violation);
+    
+            // Metrics güncelleme
+            this.metrics.violations++;
+            
+            // Audit log
+            this.auditLog({
+                type: 'validation_error',
+                error_type: type,
+                source: source,
+                details: violation
+            });
+    
+            return violation;
+        }
+
+        initializeValidators() {
+            // Validators'ları güvenli bir şekilde oluştur
+            if (window.SecurityValidator && window.SecurityValidator.TokenAuthValidator) {
+                this.tokenValidator = new window.SecurityValidator.TokenAuthValidator(this);
+            } else {
+                console.warn('[${this.timestamp}] TokenAuthValidator not available');
+            }
+        
+            if (window.SecurityValidator && window.SecurityValidator.ContentSecurityValidator) {
+                this.contentValidator = new window.SecurityValidator.ContentSecurityValidator(this);
+            } else {
+                console.warn('[${this.timestamp}] ContentSecurityValidator not available');
+            }
+        
+            if (window.SecurityValidator && window.SecurityValidator.RealTimeSecurityValidator) {
+                this.realtimeValidator = new window.SecurityValidator.RealTimeSecurityValidator(this);
+            } else {
+                console.warn('[${this.timestamp}] RealTimeSecurityValidator not available');
+            }
+        }
+
+        getCurrentTimestamp() {
+            const now = new Date();
+            return now.toISOString().slice(0, 19).replace('T', ' ');
+        }
+
+        updateTimestamp() {
+            this.timestamp = this.getCurrentTimestamp();
+            return this.timestamp;
+        }
+
+        // Kullanıcı bilgisi için yardımcı metod
+        getCurrentUser() {
+            // Örnek kullanıcı yönetimi:
+            // 1. Önce session'dan kontrol et
+            const sessionUser = sessionStorage.getItem('currentUser');
+            if (sessionUser) return sessionUser;
+
+            // 2. localStorage'dan kontrol et
+            const localUser = localStorage.getItem('currentUser');
+            if (localUser) return localUser;
+
+            // 3. Cookie'den kontrol et
+            const cookieUser = this.getCookie('currentUser');
+            if (cookieUser) return cookieUser;
+
+            // 4. Hiçbiri yoksa anonim kullanıcı
+            return 'anonymous';
+        }
+
+        // Cookie yardımcı metodu
+        getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+
+        handleValidationError(type, error, source = 'main') {
+            const currentTime = this.getCurrentTimestamp();
+            const currentUser = this.getCurrentUser();
+            
+            // Konsola log
+            console.error(`[${currentTime}] Validation error (${type}) from ${source}:`, error);
+            
+            // Violation kaydı
+            const violation = {
+                type,
+                source,
+                error: error.message,
+                timestamp: currentTime,
+                user: currentUser,
+                details: {
+                    stack: error.stack,
+                    code: error.code
+                }
+            };
+    
+            // State güncelleme
+            this.validationState.violations.push(violation);
+    
+            // Metrics güncelleme
+            this.metrics.violations++;
+            
+            // Audit log
+            this.auditLog({
+                type: 'validation_error',
+                error_type: type,
+                source: source,
+                details: violation
+            });
+    
+            return violation;
         }
 
         // SecurityValidator.js içine eklenecek
         reset() {
-            this.timestamp = '2025-03-21 11:38:16';
-            this.userLogin = 'Yldrm2015';
-            
+            this.timestamp = this.getCurrentTimestamp();
             // Violations listesini temizle
             this.violations = [];
             
@@ -1244,11 +1378,14 @@
     (function(window) {
     'use strict';
 
-    class TokenAuthValidator {
-        timestamp = '2025-03-17 11:40:28';
-        userLogin = 'Yldrm2015';
+    if (!window.SecurityValidator) {
+        window.SecurityValidator = {};
+    }
 
+    class TokenAuthValidator {
+    
         constructor(validator) {
+            this.timestamp = this.getCurrentTimestamp();
             this.validator = validator;
             
             this.authConfig = {
@@ -1299,6 +1436,11 @@
             this.crypto = window.crypto.subtle;
             
             this.initialize();
+        }
+
+        handleValidationError(type, error) {
+            // Ana validator'ın hata yönetimini kullan
+            return this.validator.handleValidationError(type, error, 'token_auth');
         }
 
         async initializeAuth() {
@@ -1586,10 +1728,10 @@
     'use strict';
 
     class ContentSecurityValidator {
-        timestamp = '2025-03-17 11:42:05';
-        userLogin = 'Yldrm2015';
+      
 
         constructor(validator) {
+            this.timestamp = this.getCurrentTimestamp();
             this.validator = validator;
 
             this.contentConfig = {
@@ -1679,6 +1821,11 @@
             this.scannerWorker = null;
             
             this.initialize();
+        }
+
+        handleValidationError(type, error) {
+            // Ana validator'ın hata yönetimini kullan
+            return this.validator.handleValidationError(type, error, 'content_security');
         }
 
         async initializeContent() {
@@ -1956,10 +2103,9 @@
     'use strict';
 
     class RealTimeSecurityValidator {
-        timestamp = '2025-03-17 11:43:46';
-        userLogin = 'Yldrm2015';
-
+      
         constructor(validator) {
+            this.timestamp = this.getCurrentTimestamp();
             this.validator = validator;
             
             this.realtimeConfig = {
@@ -2039,6 +2185,11 @@
             };
 
             this.initialize();
+        }
+
+        handleValidationError(type, error) {
+            // Ana validator'ın hata yönetimini kullan
+            return this.validator.handleValidationError(type, error, 'realtime_security');
         }
 
         initializeRateLimiter() {
