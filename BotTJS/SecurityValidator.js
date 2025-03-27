@@ -602,7 +602,7 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
             if (window.SecurityValidator && window.SecurityValidator.TokenAuthValidator) {
                 this.tokenValidator = new window.SecurityValidator.TokenAuthValidator(this);
             } else {
-                console.warn(`[${this.timestamp}] TokenAuthValidator not available`);
+                console.warn('[${this.timestamp}] TokenAuthValidator not available');
             }
         
             if (window.SecurityValidator && window.SecurityValidator.ContentSecurityValidator) {
@@ -2187,7 +2187,7 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
                 performance: []
             };
 
-            //this.initialize();
+            this.initialize();
         }
 
         handleValidationError(type, error) {
