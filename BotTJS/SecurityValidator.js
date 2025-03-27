@@ -552,9 +552,9 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
                 responseTime: []
             };
 
-            this.tokenValidator = new TokenAuthValidator(this);
+          /*  this.tokenValidator = new TokenAuthValidator(this);
             this.contentValidator = new ContentSecurityValidator(this);
-            this.realtimeValidator = new RealTimeSecurityValidator(this);
+            this.realtimeValidator = new RealTimeSecurityValidator(this);*/
 
             this.initializeValidators();
             this.initialize();
