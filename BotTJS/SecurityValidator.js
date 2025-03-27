@@ -2107,8 +2107,9 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
     class RealTimeSecurityValidator {
       
         constructor(validator) {
-            this.timestamp = this.getCurrentTimestamp();
+           
             this.validator = validator;
+            this.timestamp = validator.getCurrentTimestamp();
             
             this.realtimeConfig = {
                 rateLimit: {
