@@ -602,22 +602,22 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
             if (window.SecurityValidator && window.SecurityValidator.TokenAuthValidator) {
                 this.tokenValidator = new window.SecurityValidator.TokenAuthValidator(this);
             } else {
-                console.warn('[${this.timestamp}] TokenAuthValidator not available');
+                console.warn(`[${this.timestamp}] TokenAuthValidator not available`);  // Bu zaten doğru, backtick kullanıyor
             }
         
             if (window.SecurityValidator && window.SecurityValidator.ContentSecurityValidator) {
                 this.contentValidator = new window.SecurityValidator.ContentSecurityValidator(this);
             } else {
-                console.warn('[${this.timestamp}] ContentSecurityValidator not available');
+                console.warn(`[${this.timestamp}] ContentSecurityValidator not available`);  // Burası düzeltilmeli: ' yerine ` kullanılmalı
             }
         
             if (window.SecurityValidator && window.SecurityValidator.RealTimeSecurityValidator) {
                 this.realtimeValidator = new window.SecurityValidator.RealTimeSecurityValidator(this);
             } else {
-                console.warn('[${this.timestamp}] RealTimeSecurityValidator not available');
+                console.warn(`[${this.timestamp}] RealTimeSecurityValidator not available`);  // Burası düzeltilmeli: ' yerine ` kullanılmalı
             }
         }
-
+        
         getCurrentTimestamp() {
             const now = new Date();
             return now.toISOString().slice(0, 19).replace('T', ' ');
@@ -2187,7 +2187,7 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
                 performance: []
             };
 
-            this.initialize();
+            //this.initialize();
         }
 
         handleValidationError(type, error) {
