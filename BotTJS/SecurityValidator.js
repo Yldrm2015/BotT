@@ -1733,8 +1733,8 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
       
 
         constructor(validator) {
-            this.timestamp = this.getCurrentTimestamp();
             this.validator = validator;
+            this.timestamp = validator.getCurrentTimestamp();
 
             this.contentConfig = {
                 sanitization: {
