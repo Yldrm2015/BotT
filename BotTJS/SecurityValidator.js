@@ -617,7 +617,7 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
                 console.warn(`[${this.timestamp}] RealTimeSecurityValidator not available`);  // Burası düzeltilmeli: ' yerine ` kullanılmalı
             }
         }
-        
+
         getCurrentTimestamp() {
             const now = new Date();
             return now.toISOString().slice(0, 19).replace('T', ' ');
@@ -741,50 +741,55 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
                     console.log(`[${this.timestamp}] SecurityValidator already initialized`);
                     return;
                 }
-        
+
                 // Ana güvenlik kontrollerini başlat
                 if (!window.isSecureContext) {
                     throw new Error('Secure context required');
                 }
-        
+
                 if (this.validationConfig.https.required && 
                     window.location.protocol !== 'https:') {
                     this.upgradeToHttps();
                     return;
                 }
-        
+
                 try {
                     // Core bileşenleri başlat
                     await this.initializeHeaderValidation();
                     await this.initializeCSPMonitoring();
                     await this.setupEventListeners();
-        
-                    // Alt validator'ları başlat
-                    await Promise.all([
-                        this.tokenValidator.initializeAuth(),
-                        this.contentValidator.initializeContent(),
-                        this.realtimeValidator.initialize()
-                    ]).catch(error => {
-                        console.warn(`[${this.timestamp}] Sub-validator initialization warning:`, error);
-                    });
-        
+
+                    // Alt validator'ları güvenli bir şekilde başlat
+                    if (this.tokenValidator && typeof this.tokenValidator.initializeAuth === 'function') {
+                        await this.tokenValidator.initializeAuth().catch(error => {
+                            console.warn(`[${this.timestamp}] Token auth initialization warning:`, error);
+                        });
+                    }
+
+                    if (this.contentValidator && typeof this.contentValidator.initializeContent === 'function') {
+                        await this.contentValidator.initializeContent().catch(error => {
+                            console.warn(`[${this.timestamp}] Content security initialization warning:`, error);
+                        });
+                    }
+
+                    if (this.realtimeValidator && typeof this.realtimeValidator.initialize === 'function') {
+                        await this.realtimeValidator.initialize().catch(error => {
+                            console.warn(`[${this.timestamp}] Realtime security initialization warning:`, error);
+                        });
+                    }
+
                     this.validationState.initialized = true;
                     console.log(`[${this.timestamp}] SecurityValidator initialized successfully`);
                 } catch (initError) {
                     console.warn(`[${this.timestamp}] Component initialization warning:`, initError);
                 }
-        
+
             } catch (error) {
                 console.error(`[${this.timestamp}] Initialization failed:`, error);
                 this.handleInitializationError(error);
                 this.validationState.initialized = true;
                 this.validationState.initializationWarnings = true;
             }
-        }
-
-        upgradeToHttps() {
-            const httpsUrl = `https://${window.location.host}${window.location.pathname}${window.location.search}`;
-            window.location.replace(httpsUrl);
         }
 
         async initializeHeaderValidation() {
