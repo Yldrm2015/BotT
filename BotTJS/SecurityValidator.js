@@ -5,6 +5,358 @@
         window.SecurityValidator = {};
     }
 
+})(window);
+
+(function(window) {
+'use strict';
+
+if (!window.SecurityValidator) {
+    window.SecurityValidator = {};
+}
+
+class TokenAuthValidator {
+
+    constructor(validator) {
+        this.timestamp = this.getCurrentTimestamp();
+        this.validator = validator;
+        
+        this.authConfig = {
+            tokens: {
+                jwt: {
+                    algorithms: ['RS256', 'ES256'],
+                    maxAge: 3600,
+                    requiredClaims: ['sub', 'iat', 'exp', 'jti'],
+                    issuer: 'https://auth.example.com',
+                    audience: 'https://api.example.com'
+                },
+                session: {
+                    length: 32,
+                    entropy: 256,
+                    maxAge: 86400
+                }
+            },
+            access: {
+                roles: ['user', 'admin', 'moderator'],
+                permissions: ['read', 'write', 'delete'],
+                rbac: {
+                    enabled: true,
+                    matrix: {
+                        user: ['read'],
+                        moderator: ['read', 'write'],
+                        admin: ['read', 'write', 'delete']
+                    }
+                }
+            },
+            storage: {
+                type: 'sessionStorage',
+                prefix: 'auth_',
+                encrypt: true
+            }
+        };
+
+        // Cache ve state yönetimi
+        this.tokenCache = new Map();
+        this.validationState = {
+            initialized: false,
+            lastCheck: this.timestamp,
+            tokens: new Map(),
+            sessions: new Map(),
+            violations: []
+        };
+
+        // Crypto utils
+        this.crypto = window.crypto.subtle;
+        
+        this.initialize();
+    }
+
+    handleValidationError(type, error) {
+        // Ana validator'ın hata yönetimini kullan
+        return this.validator.handleValidationError(type, error, 'token_auth');
+    }
+
+    async initializeAuth() {
+        try {
+            // Storage başlat
+            await this.initializeStorage();
+
+            // Token izleme başlat
+            this.startTokenMonitoring();
+
+            // Oturum izleme başlat
+            this.startSessionMonitoring();
+
+            // API sağlık kontrolü
+            const apiStatus = await this.checkApiHealth();
+            if (!apiStatus) {
+                console.warn(`[${this.timestamp}] API connection failed`);
+            }
+
+            this.validationState.initialized = true;
+            console.log(`[${this.timestamp}] TokenAuthValidator initialized successfully`);
+        } catch (error) {
+            console.error(`[${this.timestamp}] Token/Auth initialization failed:`, error);
+            this.handleInitializationError(error);
+        }
+    }
+
+    async initializeStorage() {
+        const storage = this.authConfig.storage.type === 'localStorage' ? 
+                      localStorage : sessionStorage;
+
+        // Storage encryption key oluştur
+        if (this.authConfig.storage.encrypt) {
+            const key = await this.generateStorageKey();
+            await this.setEncryptionKey(key);
+        }
+
+        // Mevcut tokenleri validate et
+        for (let i = 0; i < storage.length; i++) {
+            const key = storage.key(i);
+            if (key.startsWith(this.authConfig.storage.prefix)) {
+                const token = await this.getStoredToken(key);
+                await this.validateStoredToken(token);
+            }
+        }
+    }
+
+    async generateStorageKey() {
+        const key = await this.crypto.generateKey(
+            {
+                name: 'AES-GCM',
+                length: 256
+            },
+            true,
+            ['encrypt', 'decrypt']
+        );
+
+        return key;
+    }
+
+    startTokenMonitoring() {
+        // Token expiration monitor
+        setInterval(() => {
+            this.checkTokenExpirations();
+        }, 60000); // Her dakika kontrol
+
+        // Token refresh monitor
+        setInterval(() => {
+            this.checkTokenRefreshes();
+        }, 300000); // Her 5 dakika kontrol
+    }
+
+    startSessionMonitoring() {
+        // Active session monitor
+        setInterval(() => {
+            this.checkActiveSessions();
+        }, 30000); // Her 30 saniye kontrol
+
+        // Session cleanup
+        setInterval(() => {
+            this.cleanupExpiredSessions();
+        }, 3600000); // Her saat kontrol
+    }
+
+    async validateToken(token, type = 'jwt') {
+        const startTime = performance.now();
+
+        try {
+            // Cache check
+            const cached = this.tokenCache.get(token);
+            if (cached && cached.expiresAt > Date.now()) {
+                return cached.validation;
+            }
+
+            let validation;
+            if (type === 'jwt') {
+                validation = await this.validateJWT(token);
+            } else {
+                validation = await this.validateSessionToken(token);
+            }
+
+            // Cache result
+            this.cacheValidation(token, validation);
+
+            // Metrics update
+            this.updateMetrics('token_validation', performance.now() - startTime);
+
+            return validation;
+
+        } catch (error) {
+            this.handleValidationError('token', error);
+            return {
+                valid: false,
+                error: error.message,
+                timestamp: this.timestamp
+            };
+        }
+    }
+
+    async validateJWT(token) {
+        // JWT parts
+        const parts = token.split('.');
+        if (parts.length !== 3) {
+            throw new Error('Invalid JWT format');
+        }
+
+        const [headerB64, payloadB64, signature] = parts;
+
+        // Header validation
+        const header = this.decodeBase64JSON(headerB64);
+        this.validateJWTHeader(header);
+
+        // Payload validation
+        const payload = this.decodeBase64JSON(payloadB64);
+        this.validateJWTPayload(payload);
+
+        // Signature validation
+        await this.validateJWTSignature(token);
+
+        return {
+            valid: true,
+            token: {
+                header,
+                payload,
+                signature
+            },
+            timestamp: this.timestamp
+        };
+    }
+
+    validateJWTHeader(header) {
+        // Algorithm check
+        if (!header.alg || !this.authConfig.tokens.jwt.algorithms.includes(header.alg)) {
+            throw new Error('Invalid or unsupported algorithm');
+        }
+
+        // Token type check
+        if (header.typ !== 'JWT') {
+            throw new Error('Invalid token type');
+        }
+    }
+
+    validateJWTPayload(payload) {
+        const now = Math.floor(Date.now() / 1000);
+
+        // Required claims
+        this.authConfig.tokens.jwt.requiredClaims.forEach(claim => {
+            if (!(claim in payload)) {
+                throw new Error(`Missing required claim: ${claim}`);
+            }
+        });
+
+        // Expiration
+        if (payload.exp && payload.exp < now) {
+            throw new Error('Token expired');
+        }
+
+        // Not before
+        if (payload.nbf && payload.nbf > now) {
+            throw new Error('Token not yet valid');
+        }
+
+        // Issuer
+        if (payload.iss !== this.authConfig.tokens.jwt.issuer) {
+            throw new Error('Invalid token issuer');
+        }
+
+        // Audience
+        if (payload.aud !== this.authConfig.tokens.jwt.audience) {
+            throw new Error('Invalid token audience');
+        }
+
+        // Maximum age check
+        if (payload.iat && (now - payload.iat > this.authConfig.tokens.jwt.maxAge)) {
+            throw new Error('Token too old');
+        }
+    }
+
+    async validateJWTSignature(token) {
+        try {
+            const key = await this.getPublicKey();
+            const isValid = await this.verifySignature(token, key);
+
+            if (!isValid) {
+                throw new Error('Invalid token signature');
+            }
+        } catch (error) {
+            throw new Error(`Signature validation failed: ${error.message}`);
+        }
+    }
+
+    async validatePermissions(token, required) {
+        const validation = await this.validateToken(token);
+        if (!validation.valid) {
+            return false;
+        }
+
+        const payload = validation.token.payload;
+        const role = payload.role;
+
+        if (!this.authConfig.access.roles.includes(role)) {
+            return false;
+        }
+
+        const allowedPermissions = this.authConfig.access.rbac.matrix[role];
+        return required.every(permission => allowedPermissions.includes(permission));
+    }
+
+    // Utility methods
+    decodeBase64JSON(base64Url) {
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonStr = atob(base64);
+        return JSON.parse(jsonStr);
+    }
+
+    async encryptData(data) {
+        const key = await this.getEncryptionKey();
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encoder = new TextEncoder();
+        const encoded = encoder.encode(JSON.stringify(data));
+
+        const encrypted = await this.crypto.encrypt(
+            {
+                name: 'AES-GCM',
+                iv: iv
+            },
+            key,
+            encoded
+        );
+
+        return {
+            encrypted: Array.from(new Uint8Array(encrypted)),
+            iv: Array.from(iv)
+        };
+    }
+
+    updateMetrics(type, duration) {
+        this.validator.updateMetrics(type, duration);
+    }
+
+    // Error handlers
+    handleValidationError(type, error) {
+        this.validationState.violations.push({
+            type,
+            error: error.message,
+            timestamp: this.timestamp
+        });
+    }
+
+    // Public API
+    getValidationState() {
+        return {
+            ...this.validationState,
+            timestamp: this.timestamp
+        };
+    }
+}
+
+// Ana SecurityValidator sınıfına entegre et
+window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
+
+})(window);
+
+
     class SecurityValidator {
      
         constructor() {
@@ -1373,357 +1725,7 @@
             // Global scope'a ekle
             window.SecurityValidator = SecurityValidator;
 
-        })(window);
-
-    (function(window) {
-    'use strict';
-
-    if (!window.SecurityValidator) {
-        window.SecurityValidator = {};
-    }
-
-    class TokenAuthValidator {
-    
-        constructor(validator) {
-            this.timestamp = this.getCurrentTimestamp();
-            this.validator = validator;
-            
-            this.authConfig = {
-                tokens: {
-                    jwt: {
-                        algorithms: ['RS256', 'ES256'],
-                        maxAge: 3600,
-                        requiredClaims: ['sub', 'iat', 'exp', 'jti'],
-                        issuer: 'https://auth.example.com',
-                        audience: 'https://api.example.com'
-                    },
-                    session: {
-                        length: 32,
-                        entropy: 256,
-                        maxAge: 86400
-                    }
-                },
-                access: {
-                    roles: ['user', 'admin', 'moderator'],
-                    permissions: ['read', 'write', 'delete'],
-                    rbac: {
-                        enabled: true,
-                        matrix: {
-                            user: ['read'],
-                            moderator: ['read', 'write'],
-                            admin: ['read', 'write', 'delete']
-                        }
-                    }
-                },
-                storage: {
-                    type: 'sessionStorage',
-                    prefix: 'auth_',
-                    encrypt: true
-                }
-            };
-
-            // Cache ve state yönetimi
-            this.tokenCache = new Map();
-            this.validationState = {
-                initialized: false,
-                lastCheck: this.timestamp,
-                tokens: new Map(),
-                sessions: new Map(),
-                violations: []
-            };
-
-            // Crypto utils
-            this.crypto = window.crypto.subtle;
-            
-            this.initialize();
-        }
-
-        handleValidationError(type, error) {
-            // Ana validator'ın hata yönetimini kullan
-            return this.validator.handleValidationError(type, error, 'token_auth');
-        }
-
-        async initializeAuth() {
-            try {
-                // Storage başlat
-                await this.initializeStorage();
-    
-                // Token izleme başlat
-                this.startTokenMonitoring();
-    
-                // Oturum izleme başlat
-                this.startSessionMonitoring();
-    
-                // API sağlık kontrolü
-                const apiStatus = await this.checkApiHealth();
-                if (!apiStatus) {
-                    console.warn(`[${this.timestamp}] API connection failed`);
-                }
-    
-                this.validationState.initialized = true;
-                console.log(`[${this.timestamp}] TokenAuthValidator initialized successfully`);
-            } catch (error) {
-                console.error(`[${this.timestamp}] Token/Auth initialization failed:`, error);
-                this.handleInitializationError(error);
-            }
-        }
-
-        async initializeStorage() {
-            const storage = this.authConfig.storage.type === 'localStorage' ? 
-                          localStorage : sessionStorage;
-
-            // Storage encryption key oluştur
-            if (this.authConfig.storage.encrypt) {
-                const key = await this.generateStorageKey();
-                await this.setEncryptionKey(key);
-            }
-
-            // Mevcut tokenleri validate et
-            for (let i = 0; i < storage.length; i++) {
-                const key = storage.key(i);
-                if (key.startsWith(this.authConfig.storage.prefix)) {
-                    const token = await this.getStoredToken(key);
-                    await this.validateStoredToken(token);
-                }
-            }
-        }
-
-        async generateStorageKey() {
-            const key = await this.crypto.generateKey(
-                {
-                    name: 'AES-GCM',
-                    length: 256
-                },
-                true,
-                ['encrypt', 'decrypt']
-            );
-
-            return key;
-        }
-
-        startTokenMonitoring() {
-            // Token expiration monitor
-            setInterval(() => {
-                this.checkTokenExpirations();
-            }, 60000); // Her dakika kontrol
-
-            // Token refresh monitor
-            setInterval(() => {
-                this.checkTokenRefreshes();
-            }, 300000); // Her 5 dakika kontrol
-        }
-
-        startSessionMonitoring() {
-            // Active session monitor
-            setInterval(() => {
-                this.checkActiveSessions();
-            }, 30000); // Her 30 saniye kontrol
-
-            // Session cleanup
-            setInterval(() => {
-                this.cleanupExpiredSessions();
-            }, 3600000); // Her saat kontrol
-        }
-
-        async validateToken(token, type = 'jwt') {
-            const startTime = performance.now();
-
-            try {
-                // Cache check
-                const cached = this.tokenCache.get(token);
-                if (cached && cached.expiresAt > Date.now()) {
-                    return cached.validation;
-                }
-
-                let validation;
-                if (type === 'jwt') {
-                    validation = await this.validateJWT(token);
-                } else {
-                    validation = await this.validateSessionToken(token);
-                }
-
-                // Cache result
-                this.cacheValidation(token, validation);
-
-                // Metrics update
-                this.updateMetrics('token_validation', performance.now() - startTime);
-
-                return validation;
-
-            } catch (error) {
-                this.handleValidationError('token', error);
-                return {
-                    valid: false,
-                    error: error.message,
-                    timestamp: this.timestamp
-                };
-            }
-        }
-
-        async validateJWT(token) {
-            // JWT parts
-            const parts = token.split('.');
-            if (parts.length !== 3) {
-                throw new Error('Invalid JWT format');
-            }
-
-            const [headerB64, payloadB64, signature] = parts;
-
-            // Header validation
-            const header = this.decodeBase64JSON(headerB64);
-            this.validateJWTHeader(header);
-
-            // Payload validation
-            const payload = this.decodeBase64JSON(payloadB64);
-            this.validateJWTPayload(payload);
-
-            // Signature validation
-            await this.validateJWTSignature(token);
-
-            return {
-                valid: true,
-                token: {
-                    header,
-                    payload,
-                    signature
-                },
-                timestamp: this.timestamp
-            };
-        }
-
-        validateJWTHeader(header) {
-            // Algorithm check
-            if (!header.alg || !this.authConfig.tokens.jwt.algorithms.includes(header.alg)) {
-                throw new Error('Invalid or unsupported algorithm');
-            }
-
-            // Token type check
-            if (header.typ !== 'JWT') {
-                throw new Error('Invalid token type');
-            }
-        }
-
-        validateJWTPayload(payload) {
-            const now = Math.floor(Date.now() / 1000);
-
-            // Required claims
-            this.authConfig.tokens.jwt.requiredClaims.forEach(claim => {
-                if (!(claim in payload)) {
-                    throw new Error(`Missing required claim: ${claim}`);
-                }
-            });
-
-            // Expiration
-            if (payload.exp && payload.exp < now) {
-                throw new Error('Token expired');
-            }
-
-            // Not before
-            if (payload.nbf && payload.nbf > now) {
-                throw new Error('Token not yet valid');
-            }
-
-            // Issuer
-            if (payload.iss !== this.authConfig.tokens.jwt.issuer) {
-                throw new Error('Invalid token issuer');
-            }
-
-            // Audience
-            if (payload.aud !== this.authConfig.tokens.jwt.audience) {
-                throw new Error('Invalid token audience');
-            }
-
-            // Maximum age check
-            if (payload.iat && (now - payload.iat > this.authConfig.tokens.jwt.maxAge)) {
-                throw new Error('Token too old');
-            }
-        }
-
-        async validateJWTSignature(token) {
-            try {
-                const key = await this.getPublicKey();
-                const isValid = await this.verifySignature(token, key);
-
-                if (!isValid) {
-                    throw new Error('Invalid token signature');
-                }
-            } catch (error) {
-                throw new Error(`Signature validation failed: ${error.message}`);
-            }
-        }
-
-        async validatePermissions(token, required) {
-            const validation = await this.validateToken(token);
-            if (!validation.valid) {
-                return false;
-            }
-
-            const payload = validation.token.payload;
-            const role = payload.role;
-
-            if (!this.authConfig.access.roles.includes(role)) {
-                return false;
-            }
-
-            const allowedPermissions = this.authConfig.access.rbac.matrix[role];
-            return required.every(permission => allowedPermissions.includes(permission));
-        }
-
-        // Utility methods
-        decodeBase64JSON(base64Url) {
-            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-            const jsonStr = atob(base64);
-            return JSON.parse(jsonStr);
-        }
-
-        async encryptData(data) {
-            const key = await this.getEncryptionKey();
-            const iv = crypto.getRandomValues(new Uint8Array(12));
-            const encoder = new TextEncoder();
-            const encoded = encoder.encode(JSON.stringify(data));
-
-            const encrypted = await this.crypto.encrypt(
-                {
-                    name: 'AES-GCM',
-                    iv: iv
-                },
-                key,
-                encoded
-            );
-
-            return {
-                encrypted: Array.from(new Uint8Array(encrypted)),
-                iv: Array.from(iv)
-            };
-        }
-
-        updateMetrics(type, duration) {
-            this.validator.updateMetrics(type, duration);
-        }
-
-        // Error handlers
-        handleValidationError(type, error) {
-            this.validationState.violations.push({
-                type,
-                error: error.message,
-                timestamp: this.timestamp
-            });
-        }
-
-        // Public API
-        getValidationState() {
-            return {
-                ...this.validationState,
-                timestamp: this.timestamp
-            };
-        }
-    }
-
-    // Ana SecurityValidator sınıfına entegre et
-    window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
-
-})(window);
-
+   
 (function(window) {
     'use strict';
 
