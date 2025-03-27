@@ -597,24 +597,40 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
             return violation;
         }
 
-        initializeValidators() {
-            // Validators'ları güvenli bir şekilde oluştur
-            if (window.SecurityValidator && window.SecurityValidator.TokenAuthValidator) {
-                this.tokenValidator = new window.SecurityValidator.TokenAuthValidator(this);
-            } else {
-                console.warn('[${this.timestamp}] TokenAuthValidator not available');
-            }
+        async initializeValidators() {
+            try {
+                // TokenAuthValidator'ı başlat
+                if (window.SecurityValidator && window.SecurityValidator.TokenAuthValidator) {
+                    this.tokenValidator = new window.SecurityValidator.TokenAuthValidator(this);
+                    await this.tokenValidator.initializeAuth().catch(error => {
+                        console.warn(`[${this.timestamp}] TokenAuthValidator initialization warning:`, error);
+                    });
+                } else {
+                    console.warn(`[${this.timestamp}] TokenAuthValidator not available`);
+                }
         
-            if (window.SecurityValidator && window.SecurityValidator.ContentSecurityValidator) {
-                this.contentValidator = new window.SecurityValidator.ContentSecurityValidator(this);
-            } else {
-                console.warn('[${this.timestamp}] ContentSecurityValidator not available');
-            }
+                // ContentSecurityValidator'ı başlat
+                if (window.SecurityValidator && window.SecurityValidator.ContentSecurityValidator) {
+                    this.contentValidator = new window.SecurityValidator.ContentSecurityValidator(this);
+                    await this.contentValidator.initializeContent().catch(error => {
+                        console.warn(`[${this.timestamp}] ContentSecurityValidator initialization warning:`, error);
+                    });
+                } else {
+                    console.warn(`[${this.timestamp}] ContentSecurityValidator not available`);
+                }
         
-            if (window.SecurityValidator && window.SecurityValidator.RealTimeSecurityValidator) {
-                this.realtimeValidator = new window.SecurityValidator.RealTimeSecurityValidator(this);
-            } else {
-                console.warn('[${this.timestamp}] RealTimeSecurityValidator not available');
+                // RealTimeSecurityValidator'ı başlat
+                if (window.SecurityValidator && window.SecurityValidator.RealTimeSecurityValidator) {
+                    this.realtimeValidator = new window.SecurityValidator.RealTimeSecurityValidator(this);
+                    await this.realtimeValidator.initialize().catch(error => {
+                        console.warn(`[${this.timestamp}] RealTimeSecurityValidator initialization warning:`, error);
+                    });
+                } else {
+                    console.warn(`[${this.timestamp}] RealTimeSecurityValidator not available`);
+                }
+            } catch (error) {
+                console.error(`[${this.timestamp}] Validators initialization failed:`, error);
+                throw error;
             }
         }
 
@@ -736,38 +752,40 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
 
         async initialize() {
             try {
-                // Başlangıç kontrolü
+                // Eğer zaten başlatıldıysa tekrar başlatma
                 if (this.validationState.initialized) {
                     console.log(`[${this.timestamp}] SecurityValidator already initialized`);
                     return;
                 }
         
-                // Ana güvenlik kontrollerini başlat
+                // Güvenli context kontrolü
                 if (!window.isSecureContext) {
                     throw new Error('Secure context required');
                 }
         
+                // HTTPS kontrolü
                 if (this.validationConfig.https.required && 
                     window.location.protocol !== 'https:') {
-                    this.upgradeToHttps();
+                    this.upgradeToHttps(); // HTTP'den HTTPS'e yönlendir
                     return;
                 }
         
                 try {
-                    // Core bileşenleri başlat
-                    await this.initializeHeaderValidation();
-                    await this.initializeCSPMonitoring();
-                    await this.setupEventListeners();
+                    // Temel güvenlik bileşenlerini başlat
+                    await this.initializeHeaderValidation();  // Header güvenliği
+                    await this.initializeCSPMonitoring();     // Content Security Policy
+                    await this.setupEventListeners();         // Event dinleyicileri
         
-                    // Alt validator'ları başlat
+                    // Alt validator'ları paralel olarak başlat
                     await Promise.all([
-                        this.tokenValidator.initializeAuth(),
-                        this.contentValidator.initializeContent(),
-                        this.realtimeValidator.initialize()
+                        this.tokenValidator.initializeAuth(),      // Token güvenliği
+                        this.contentValidator.initializeContent(), // İçerik güvenliği
+                        this.realtimeValidator.initialize()        // Gerçek zamanlı güvenlik
                     ]).catch(error => {
                         console.warn(`[${this.timestamp}] Sub-validator initialization warning:`, error);
                     });
         
+                    // Başarılı başlatma
                     this.validationState.initialized = true;
                     console.log(`[${this.timestamp}] SecurityValidator initialized successfully`);
                 } catch (initError) {
@@ -781,7 +799,8 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
                 this.validationState.initializationWarnings = true;
             }
         }
-
+        
+        // HTTP'den HTTPS'e yönlendirme
         upgradeToHttps() {
             const httpsUrl = `https://${window.location.host}${window.location.pathname}${window.location.search}`;
             window.location.replace(httpsUrl);
@@ -2187,7 +2206,7 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
                 performance: []
             };
 
-            this.initialize();
+            //this.initialize();
         }
 
         handleValidationError(type, error) {
