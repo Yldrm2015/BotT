@@ -1822,7 +1822,7 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
             // Content scanning için Web Worker
             this.scannerWorker = null;
             
-            this.initialize();
+           // this.initialize();
         }
 
         handleValidationError(type, error) {
