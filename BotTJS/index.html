@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bot Detection System Tester</title>
+    <!--<title>Bot Detection System</title>-->
+    <!-- Önce bağımlılıklar yüklenmeli -->
+    <script src="BotTJS/SecurityValidator.js"></script>
+    <script src="BotTJS/TokenAuthValidator.js"></script>
+    <script src="BotTJS/ContentSecurityValidator.js"></script>
+    <script src="BotTJS/RealTimeSecurityValidator.js"></script>
+    <!-- En son ana sistem yüklenmeli -->
+    <script src="BotTJS/BotT.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -280,11 +288,12 @@
     </div>
 
 <!-- SecurityValidator'ı ekle -->
-<script src="SecurityValidator.js"></script>
+<script src="/SecurityValidator.js"></script>
 
-<script src="./BotT.js"></script>
+<script src="/BotT.js"></script>
 
 <!-- <script src="ApiManager.js"></script> -->
+ 
 
 <!-- Entegrasyon script'i -->
 <script>
@@ -318,6 +327,10 @@
             console.error('Initialization error:', error);
         }
     });
+    
+    document.addEventListener('DOMContentLoaded', function() {
+            window.botDetection = new BotDetectionSystem();
+        });
 
     function updateUI(botResults, securityResults) {
         // Bot detection sonuçları
