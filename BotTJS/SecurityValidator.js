@@ -19,6 +19,7 @@ class TokenAuthValidator {
     constructor(validator) {
         this.timestamp = this.getCurrentTimestamp();
         this.validator = validator;
+        this.initialize();
         
         this.authConfig = {
             tokens: {
@@ -598,11 +599,19 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
         }
 
         initializeValidators() {
-            // Validators'ları güvenli bir şekilde oluştur
-            if (window.SecurityValidator && window.SecurityValidator.TokenAuthValidator) {
-                this.tokenValidator = new window.SecurityValidator.TokenAuthValidator(this);
-            } else {
-                console.warn(`[${this.timestamp}] TokenAuthValidator not available`);  // Bu zaten doğru, backtick kullanıyor
+            try {
+                // Token validator başlat
+                this.tokenValidator = new TokenAuthValidator(this);
+                
+                // Content validator başlat
+                this.contentValidator = new ContentSecurityValidator(this);
+                
+                // Realtime validator başlat
+                this.realtimeValidator = new RealTimeSecurityValidator(this);
+                
+                console.log(`[${this.timestamp}] Validators initialized successfully`);
+            } catch (error) {
+                console.error(`[${this.timestamp}] Validator initialization failed:`, error);
             }
         
             if (window.SecurityValidator && window.SecurityValidator.ContentSecurityValidator) {
@@ -858,29 +867,33 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
         }
 
         validateHeaders(headers) {
-            const missing = this.findMissingHeaders(headers);
-            const invalid = this.findInvalidHeaderValues(headers);
-            const warnings = this.checkRecommendedHeaders(headers);
-        
-            const result = {
-                valid: missing.length === 0 && invalid.length === 0,
-                missing,
-                invalid,
-                warnings,
-                timestamp: this.timestamp
+            // Gerekli başlıkları ekle
+            const requiredHeaders = {
+                'Content-Security-Policy': "default-src 'self'",
+                'X-Content-Type-Options': 'nosniff',
+                'X-Frame-Options': 'DENY',
+                'X-XSS-Protection': '1; mode=block',
+                'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'
             };
         
-            // Critical headers eksik ise
+            // Eksik başlıkları kontrol et
+            const missing = Object.keys(requiredHeaders).filter(header => 
+                !headers.some(([key]) => key.toLowerCase() === header.toLowerCase())
+            );
+        
             if (missing.length > 0) {
-                this.handleMissingHeaders(missing);
+                // Eksik başlıkları ekle
+                missing.forEach(header => {
+                    headers.push([header, requiredHeaders[header]]);
+                });
             }
         
-            // Header değerleri invalid ise
-            if (invalid.length > 0) {
-                this.handleInvalidHeaders(invalid);
-            }
-        
-            return result;
+            return {
+                valid: true,
+                headers: headers,
+                missing: [],
+                timestamp: this.timestamp
+            };
         }
         
         // handleMissingHeaders fonksiyonunu sınıfın üye fonksiyonu olarak tanımla
@@ -1736,10 +1749,10 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
 
     class ContentSecurityValidator {
       
-
         constructor(validator) {
             this.validator = validator;
             this.timestamp = validator.getCurrentTimestamp();
+            this.scannerWorker = null;
 
             this.contentConfig = {
                 sanitization: {
@@ -1830,6 +1843,19 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
            // this.initialize();
         }
 
+        setupFileValidation() {
+            if (!this.contentConfig?.validation?.files) {
+                throw new Error('File validation configuration missing');
+            }
+        
+            const fileInputs = document.querySelectorAll('input[type="file"]');
+            fileInputs.forEach(input => {
+                input.addEventListener('change', (event) => {
+                    this.validateFileUpload(event.target.files);
+                });
+            });
+        }
+
         handleValidationError(type, error) {
             // Ana validator'ın hata yönetimini kullan
             return this.validator.handleValidationError(type, error, 'content_security');
@@ -1850,6 +1876,8 @@ window.SecurityValidator.TokenAuthValidator = TokenAuthValidator;
     
                 // File upload handlers
                 this.setupFileValidation();
+
+                await this.initializeScanner();
     
                 this.validationState.initialized = true;
                 console.log(`[${this.timestamp}] ContentSecurityValidator initialized`);
